@@ -261,6 +261,90 @@ public class BeanstalkClient {
 	}
 
 	/**
+	 * Peeks a job on the queue.
+	 * @param state Job state, one of "ready", "delayed", or "buried"
+	 *   only if immediately available.
+	 * @return The first job on the queue with the given state, or null if no job is available.
+	 * @throws BeanstalkException If an unexpected response is received from the server, or other unexpected
+	 * 	 problem occurs.
+	 */
+	public BeanstalkJob peek(String state) throws BeanstalkException{
+		try {			
+			this.init();
+			String command = "peek-" + state + "\r\n";
+			
+			log.debug(this);
+			log.debug(command);
+			con.write(command);
+			String line = con.readControlResponse();
+			log.debug(line);
+
+			if (line.startsWith("NOT_FOUND")) {
+				return null;
+			}
+			
+			if (!line.startsWith("FOUND ")) {
+				throw new BeanstalkException(line);
+			}
+
+			String[] tmp = line.split("\\s+");
+			long id = Long.parseLong(tmp[1]);
+			
+			int numBytes= Integer.parseInt(tmp[2]);
+			
+			log.debug("ID : " + id);
+			log.debug("numbytes: " + numBytes);
+				
+			byte[] bytes = con.readBytes(numBytes);
+//			log.info("GOT TASK: " + new String(bytes));
+			
+			BeanstalkJob job = new BeanstalkJob();
+			job.setData(bytes);
+			job.setId(id);
+			job.setClient(this);
+			return job;	
+			
+		} catch (BeanstalkDisconnectedException x) {
+			this.reap = true; //reap that shit..
+			throw x;
+		} catch (BeanstalkException x) {
+			throw x;
+		} catch (Exception x) {
+			throw new BeanstalkException(x);
+		}
+	}
+
+	/**
+	 * Peeks a ready job on the queue.
+	 * @return The first job on the queue with the given state, or null if no job is available.
+	 * @throws BeanstalkException If an unexpected response is received from the server, or other unexpected
+	 * 	 problem occurs.
+	 */
+        public BeanstalkJob peekReady() throws BeanstalkException{
+            return peek("ready");
+        }
+
+	/**
+	 * Peeks a delayed job on the queue.
+	 * @return The first job on the queue with the given state, or null if no job is available.
+	 * @throws BeanstalkException If an unexpected response is received from the server, or other unexpected
+	 * 	 problem occurs.
+	 */
+        public BeanstalkJob peekDelayed() throws BeanstalkException{
+            return peek("delayed");
+        }
+
+	/**
+	 * Peeks a buried job on the queue.
+	 * @return The first job on the queue with the given state, or null if no job is available.
+	 * @throws BeanstalkException If an unexpected response is received from the server, or other unexpected
+	 * 	 problem occurs.
+	 */
+        public BeanstalkJob peekBuried() throws BeanstalkException{
+            return peek("buried");
+        }
+
+	/**
 	 * Reserves a job from the queue.
 	 * @param timeoutSeconds The number of seconds to wait for a job. Null if a job should be reserved
 	 *   only if immediately available.
